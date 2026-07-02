@@ -810,7 +810,17 @@ class VarianceBinarizer(BaseBinarizer):
                         aug_map[aug_item["name"]] = [aug_task]
                     aug_list.append(aug_task)
                 elif aug_type == _AUG_MUTATE:
-                    aug_item["kwargs"]["speed"] = speed
+                    aug_task = {
+                        "name": aug_item["name"],
+                        "func": aug_item["func"],
+                        "kwargs": deepcopy(aug_item["kwargs"]),
+                    }
+                    aug_task["kwargs"]["speed"] = speed
+                    if aug_item["name"] in aug_map:
+                        aug_map[aug_item["name"]].append(aug_task)
+                    else:
+                        aug_map[aug_item["name"]] = [aug_task]
+                    aug_list.append(aug_task)
 
             total_scale += scale
 
