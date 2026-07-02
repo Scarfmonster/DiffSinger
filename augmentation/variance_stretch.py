@@ -136,7 +136,9 @@ class VarianceStretchAugmentation(BaseAugmentation):
                 nm_t = torch.from_numpy(aug_item["note_midi"]).to(self.device)
                 mn_t = torch.from_numpy(aug_item["mel2note"]).to(self.device)
                 fmp = torch.gather(F.pad(nm_t, [1, 0], value=0.0), 0, mn_t)
-                aug_item["base_pitch"] = self.midi_smooth(fmp[None])[0].cpu().numpy()
+                aug_item["base_pitch"] = (
+                    self.midi_smooth(fmp[None])[0].detach().cpu().numpy()
+                )
 
             # midi recomputation (conditional on predict_dur)
             if "midi" in aug_item:
