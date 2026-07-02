@@ -80,7 +80,7 @@ Arguments for fixed pitch shifting augmentation.
 Whether to apply fixed pitch shifting augmentation.
 
 <table><tbody>
-<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
 <tr><td align="center"><b>scope</b></td><td>preprocessing</td>
 <tr><td align="center"><b>customizability</b></td><td>recommended</td>
 <tr><td align="center"><b>type</b></td><td>bool</td>
@@ -93,7 +93,7 @@ Whether to apply fixed pitch shifting augmentation.
 Scale ratio of each target in fixed pitch shifting augmentation.
 
 <table><tbody>
-<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
 <tr><td align="center"><b>scope</b></td><td>preprocessing</td>
 <tr><td align="center"><b>customizability</b></td><td>recommended</td>
 <tr><td align="center"><b>type</b></td><td>tuple</td>
@@ -105,7 +105,7 @@ Scale ratio of each target in fixed pitch shifting augmentation.
 Targets (in semitones) of fixed pitch shifting augmentation.
 
 <table><tbody>
-<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
 <tr><td align="center"><b>scope</b></td><td>preprocessing</td>
 <tr><td align="center"><b>customizability</b></td><td>not recommended</td>
 <tr><td align="center"><b>type</b></td><td>tuple</td>
@@ -125,7 +125,7 @@ Arguments for random pitch shifting augmentation.
 Whether to apply random pitch shifting augmentation.
 
 <table><tbody>
-<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
 <tr><td align="center"><b>scope</b></td><td>preprocessing</td>
 <tr><td align="center"><b>customizability</b></td><td>recommended</td>
 <tr><td align="center"><b>type</b></td><td>bool</td>
@@ -138,7 +138,7 @@ Whether to apply random pitch shifting augmentation.
 Range of the random pitch shifting ( in semitones).
 
 <table><tbody>
-<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
 <tr><td align="center"><b>scope</b></td><td>preprocessing</td>
 <tr><td align="center"><b>customizability</b></td><td>not recommended</td>
 <tr><td align="center"><b>type</b></td><td>tuple</td>
@@ -150,7 +150,7 @@ Range of the random pitch shifting ( in semitones).
 Scale ratio of the random pitch shifting augmentation.
 
 <table><tbody>
-<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
 <tr><td align="center"><b>scope</b></td><td>preprocessing</td>
 <tr><td align="center"><b>customizability</b></td><td>recommended</td>
 <tr><td align="center"><b>type</b></td><td>float</td>
@@ -170,7 +170,7 @@ Arguments for random time stretching augmentation.
 Whether to apply random time stretching augmentation.
 
 <table><tbody>
-<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
 <tr><td align="center"><b>scope</b></td><td>preprocessing</td>
 <tr><td align="center"><b>customizability</b></td><td>recommended</td>
 <tr><td align="center"><b>type</b></td><td>bool</td>
@@ -182,7 +182,7 @@ Whether to apply random time stretching augmentation.
 Range of random time stretching factors.
 
 <table><tbody>
-<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
 <tr><td align="center"><b>scope</b></td><td>preprocessing</td>
 <tr><td align="center"><b>customizability</b></td><td>not recommended</td>
 <tr><td align="center"><b>type</b></td><td>tuple</td>
@@ -194,7 +194,7 @@ Range of random time stretching factors.
 Scale ratio of random time stretching augmentation.
 
 <table><tbody>
-<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
 <tr><td align="center"><b>scope</b></td><td>preprocessing</td>
 <tr><td align="center"><b>customizability</b></td><td>recommended</td>
 <tr><td align="center"><b>type</b></td><td>float</td>

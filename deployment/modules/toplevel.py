@@ -7,12 +7,19 @@ import torch.nn.functional as F
 from torch import Tensor
 
 from deployment.modules.diffusion import (
-    GaussianDiffusionONNX, PitchDiffusionONNX, MultiVarianceDiffusionONNX
+    GaussianDiffusionONNX,
+    PitchDiffusionONNX,
+    MultiVarianceDiffusionONNX,
 )
 from deployment.modules.rectified_flow import (
-    RectifiedFlowONNX, PitchRectifiedFlowONNX, MultiVarianceRectifiedFlowONNX
+    RectifiedFlowONNX,
+    PitchRectifiedFlowONNX,
+    MultiVarianceRectifiedFlowONNX,
 )
-from deployment.modules.fastspeech2 import FastSpeech2AcousticONNX, FastSpeech2VarianceONNX
+from deployment.modules.fastspeech2 import (
+    FastSpeech2AcousticONNX,
+    FastSpeech2VarianceONNX,
+)
 from modules.toplevel import DiffSingerAcoustic, DiffSingerVariance
 from utils.hparams import hparams
 
@@ -23,56 +30,60 @@ class DiffSingerAcousticONNX(DiffSingerAcoustic):
         del self.fs2
         del self.diffusion
         self.fs2 = FastSpeech2AcousticONNX(
-            vocab_size=vocab_size,
-            cross_lingual_token_idx=cross_lingual_token_idx
+            vocab_size=vocab_size, cross_lingual_token_idx=cross_lingual_token_idx
         )
-        if self.diffusion_type == 'ddpm':
+        if self.diffusion_type == "ddpm":
             self.diffusion = GaussianDiffusionONNX(
                 out_dims=out_dims,
                 num_feats=1,
-                timesteps=hparams['timesteps'],
-                k_step=hparams['K_step'],
+                timesteps=hparams["timesteps"],
+                k_step=hparams["K_step"],
                 backbone_type=self.backbone_type,
                 backbone_args=self.backbone_args,
-                spec_min=hparams['spec_min'],
-                spec_max=hparams['spec_max']
+                spec_min=hparams["spec_min"],
+                spec_max=hparams["spec_max"],
             )
-        elif self.diffusion_type == 'reflow':
+        elif self.diffusion_type == "reflow":
             self.diffusion = RectifiedFlowONNX(
                 out_dims=out_dims,
                 num_feats=1,
-                t_start=hparams['T_start'],
-                time_scale_factor=hparams['time_scale_factor'],
+                t_start=hparams["T_start"],
+                time_scale_factor=hparams["time_scale_factor"],
                 backbone_type=self.backbone_type,
                 backbone_args=self.backbone_args,
-                spec_min=hparams['spec_min'],
-                spec_max=hparams['spec_max']
+                spec_min=hparams["spec_min"],
+                spec_max=hparams["spec_max"],
             )
         else:
             raise ValueError(f"Invalid diffusion type: {self.diffusion_type}")
-        self.mel_base = hparams.get('mel_base', '10')
+        self.mel_base = hparams.get("mel_base", "10")
 
     def ensure_mel_base(self, mel):
-        if self.mel_base != 'e':
+        if self.mel_base != "e":
             # log10 mel to log mel
             mel = mel * 2.30259
         return mel
 
     def forward_fs2_aux(
-            self,
-            tokens: Tensor,
-            durations: Tensor,
-            f0: Tensor,
-            variances: dict,
-            gender: Tensor = None,
-            velocity: Tensor = None,
-            spk_embed: Tensor = None,
-            languages: Tensor = None
+        self,
+        tokens: Tensor,
+        durations: Tensor,
+        f0: Tensor,
+        variances: dict,
+        gender: Tensor = None,
+        velocity: Tensor = None,
+        spk_embed: Tensor = None,
+        languages: Tensor = None,
     ):
         condition = self.fs2(
-            tokens, durations, f0, variances=variances,
-            gender=gender, velocity=velocity, spk_embed=spk_embed,
-            languages=languages
+            tokens,
+            durations,
+            f0,
+            variances=variances,
+            gender=gender,
+            velocity=velocity,
+            spk_embed=spk_embed,
+            languages=languages,
         )
         if self.use_shallow_diffusion:
             aux_mel_pred = self.aux_decoder(condition, infer=True)
@@ -81,8 +92,7 @@ class DiffSingerAcousticONNX(DiffSingerAcoustic):
             return condition
 
     def forward_shallow_diffusion(
-            self, condition: Tensor, x_start: Tensor,
-            depth, steps: int
+        self, condition: Tensor, x_start: Tensor, depth, steps: int
     ) -> Tensor:
         mel_pred = self.diffusion(condition, x_start=x_start, depth=depth, steps=steps)
         return self.ensure_mel_base(mel_pred)
@@ -92,8 +102,7 @@ class DiffSingerAcousticONNX(DiffSingerAcoustic):
         return self.ensure_mel_base(mel_pred)
 
     def forward_shallow_reflow(
-            self, condition: Tensor, x_end: Tensor,
-            depth, steps: int
+        self, condition: Tensor, x_end: Tensor, depth, steps: int
     ):
         mel_pred = self.diffusion(condition, x_end=x_end, depth=depth, steps=steps)
         return self.ensure_mel_base(mel_pred)
@@ -134,82 +143,99 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
         super().__init__(vocab_size=vocab_size)
         del self.fs2
         self.fs2 = FastSpeech2VarianceONNX(
-            vocab_size=vocab_size,
-            cross_lingual_token_idx=cross_lingual_token_idx
+            vocab_size=vocab_size, cross_lingual_token_idx=cross_lingual_token_idx
         )
-        self.hidden_size = hparams['hidden_size']
+        self.hidden_size = hparams["hidden_size"]
         if self.predict_pitch:
             del self.pitch_predictor
             self.smooth: nn.Conv1d = None
-            pitch_hparams = hparams['pitch_prediction_args']
-            if self.diffusion_type == 'ddpm':
+            pitch_hparams = hparams["pitch_prediction_args"]
+            if self.diffusion_type == "ddpm":
                 self.pitch_predictor = PitchDiffusionONNX(
-                    vmin=pitch_hparams['pitd_norm_min'],
-                    vmax=pitch_hparams['pitd_norm_max'],
-                    cmin=pitch_hparams['pitd_clip_min'],
-                    cmax=pitch_hparams['pitd_clip_max'],
-                    repeat_bins=pitch_hparams['repeat_bins'],
-                    timesteps=hparams['timesteps'],
-                    k_step=hparams['K_step'],
+                    vmin=pitch_hparams["pitd_norm_min"],
+                    vmax=pitch_hparams["pitd_norm_max"],
+                    cmin=pitch_hparams["pitd_clip_min"],
+                    cmax=pitch_hparams["pitd_clip_max"],
+                    repeat_bins=pitch_hparams["repeat_bins"],
+                    timesteps=hparams["timesteps"],
+                    k_step=hparams["K_step"],
                     backbone_type=self.pitch_backbone_type,
-                    backbone_args=self.pitch_backbone_args
+                    backbone_args=self.pitch_backbone_args,
                 )
-            elif self.diffusion_type == 'reflow':
+            elif self.diffusion_type == "reflow":
                 self.pitch_predictor = PitchRectifiedFlowONNX(
-                    vmin=pitch_hparams['pitd_norm_min'],
-                    vmax=pitch_hparams['pitd_norm_max'],
-                    cmin=pitch_hparams['pitd_clip_min'],
-                    cmax=pitch_hparams['pitd_clip_max'],
-                    repeat_bins=pitch_hparams['repeat_bins'],
-                    time_scale_factor=hparams['time_scale_factor'],
+                    vmin=pitch_hparams["pitd_norm_min"],
+                    vmax=pitch_hparams["pitd_norm_max"],
+                    cmin=pitch_hparams["pitd_clip_min"],
+                    cmax=pitch_hparams["pitd_clip_max"],
+                    repeat_bins=pitch_hparams["repeat_bins"],
+                    time_scale_factor=hparams["time_scale_factor"],
                     backbone_type=self.pitch_backbone_type,
-                    backbone_args=self.pitch_backbone_args
+                    backbone_args=self.pitch_backbone_args,
                 )
             else:
                 raise ValueError(f"Invalid diffusion type: {self.diffusion_type}")
         if self.predict_variances:
             del self.variance_predictor
-            if self.diffusion_type == 'ddpm':
-                self.variance_predictor = self.build_adaptor(cls=MultiVarianceDiffusionONNX)
-            elif self.diffusion_type == 'reflow':
-                self.variance_predictor = self.build_adaptor(cls=MultiVarianceRectifiedFlowONNX)
+            if self.diffusion_type == "ddpm":
+                self.variance_predictor = self.build_adaptor(
+                    cls=MultiVarianceDiffusionONNX
+                )
+            elif self.diffusion_type == "reflow":
+                self.variance_predictor = self.build_adaptor(
+                    cls=MultiVarianceRectifiedFlowONNX
+                )
             else:
                 raise NotImplementedError(self.diffusion_type)
 
     def build_smooth_op(self, device):
-        smooth_kernel_size = round(hparams['midi_smooth_width'] * hparams['audio_sample_rate'] / hparams['hop_size'])
+        smooth_kernel_size = round(
+            hparams["midi_smooth_width"]
+            * hparams["audio_sample_rate"]
+            / hparams["hop_size"]
+        )
         smooth = nn.Conv1d(
             in_channels=1,
             out_channels=1,
             kernel_size=smooth_kernel_size,
             bias=False,
-            padding='same',
-            padding_mode='replicate'
+            padding="same",
+            padding_mode="replicate",
         ).eval()
-        smooth_kernel = torch.sin(torch.from_numpy(
-            np.linspace(0, 1, smooth_kernel_size).astype(np.float32) * np.pi
-        ))
+        smooth_kernel = torch.sin(
+            torch.from_numpy(
+                np.linspace(0, 1, smooth_kernel_size).astype(np.float32) * np.pi
+            )
+        )
         smooth_kernel /= smooth_kernel.sum()
         smooth.weight.data = smooth_kernel[None, None]
         self.smooth = smooth.to(device)
 
     def embed_frozen_spk(self, encoder_out):
-        if hparams['use_spk_id'] and hasattr(self, 'frozen_spk_embed'):
+        if hparams["use_spk_id"] and hasattr(self, "frozen_spk_embed"):
             encoder_out += self.frozen_spk_embed
         return encoder_out
 
-    def forward_linguistic_encoder_word(self, tokens, word_div, word_dur, languages=None):
-        encoder_out, x_masks = self.fs2.forward_encoder_word(tokens, word_div, word_dur, languages=languages)
+    def forward_linguistic_encoder_word(
+        self, tokens, word_div, word_dur, languages=None
+    ):
+        encoder_out, x_masks = self.fs2.forward_encoder_word(
+            tokens, word_div, word_dur, languages=languages
+        )
         encoder_out = self.embed_frozen_spk(encoder_out)
         return encoder_out, x_masks
 
     def forward_linguistic_encoder_phoneme(self, tokens, ph_dur, languages=None):
-        encoder_out, x_masks = self.fs2.forward_encoder_phoneme(tokens, ph_dur, languages=languages)
+        encoder_out, x_masks = self.fs2.forward_encoder_phoneme(
+            tokens, ph_dur, languages=languages
+        )
         encoder_out = self.embed_frozen_spk(encoder_out)
         return encoder_out, x_masks
 
     def forward_dur_predictor(self, encoder_out, x_masks, ph_midi, spk_embed=None):
-        return self.fs2.forward_dur_predictor(encoder_out, x_masks, ph_midi, spk_embed=spk_embed)
+        return self.fs2.forward_dur_predictor(
+            encoder_out, x_masks, ph_midi, spk_embed=spk_embed
+        )
 
     def forward_mel2x_gather(self, x_src, x_dur, x_dim=None, check_stretch_embed=False):
         mel2x = self.lr(x_dur)
@@ -223,26 +249,48 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
         if self.use_stretch_embed and check_stretch_embed:
             stretch = torch.round(1000 * self.sr(_mel2x, x_dur))
             table = self.stretch_embed(torch.arange(0, 1001, device=stretch.device))
-            stretch_embed = torch.index_select(table, 0, stretch.view(-1).long()).view_as(x_cond)
+            stretch_embed = torch.index_select(
+                table, 0, stretch.view(-1).long()
+            ).view_as(x_cond)
             x_cond += stretch_embed
             stretch_embed_rnn_out, _ = self.stretch_embed_rnn(x_cond)
             x_cond += stretch_embed_rnn_out
         return x_cond
 
     def forward_pitch_preprocess(
-            self, encoder_out, ph_dur,
-            note_midi=None, note_rest=None, note_dur=None, note_glide=None,
-            pitch=None, expr=None, retake=None, spk_embed=None
+        self,
+        encoder_out,
+        ph_dur,
+        note_midi=None,
+        note_rest=None,
+        note_dur=None,
+        note_glide=None,
+        pitch=None,
+        expr=None,
+        retake=None,
+        spk_embed=None,
     ):
-        condition = self.forward_mel2x_gather(encoder_out, ph_dur, x_dim=self.hidden_size, check_stretch_embed=True)
+        condition = self.forward_mel2x_gather(
+            encoder_out, ph_dur, x_dim=self.hidden_size, check_stretch_embed=True
+        )
+        if self.use_key_shift_embed and hasattr(self, "frozen_key_shift"):
+            condition += self.key_shift_embed(
+                self.frozen_key_shift[:, None, None]
+                * self.variance_retake_scaling["key_shift"]
+            )
+        if self.use_speed_embed and hasattr(self, "frozen_speed"):
+            condition += self.speed_embed(
+                self.frozen_speed[:, None, None] * self.variance_retake_scaling["speed"]
+            )
         if self.use_melody_encoder:
             if self.melody_encoder.use_glide_embed and note_glide is None:
                 note_glide = torch.LongTensor([[0]]).to(encoder_out.device)
             melody_encoder_out = self.melody_encoder(
-                note_midi, note_rest, note_dur,
-                glide=note_glide
+                note_midi, note_rest, note_dur, glide=note_glide
             )
-            melody_encoder_out = self.forward_mel2x_gather(melody_encoder_out, note_dur, x_dim=self.hidden_size)
+            melody_encoder_out = self.forward_mel2x_gather(
+                melody_encoder_out, note_dur, x_dim=self.hidden_size
+            )
             condition += melody_encoder_out
         if expr is None:
             retake_embed = self.pitch_retake_embed(retake.long())
@@ -254,7 +302,7 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
                 torch.zeros(1, 1, dtype=torch.long, device=encoder_out.device)
             )  # [B=1, T=1] => [B=1, T=1, H]
             expr = (expr * retake)[:, :, None]  # [B, T, 1]
-            retake_embed = expr * retake_true_embed + (1. - expr) * retake_false_embed
+            retake_embed = expr * retake_true_embed + (1.0 - expr) * retake_false_embed
         pitch_cond = condition + retake_embed
         frame_midi_pitch = self.forward_mel2x_gather(note_midi, note_dur, x_dim=None)
         base_pitch = self.smooth(frame_midi_pitch)
@@ -270,13 +318,11 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
                 pitch_cond += self.base_pitch_embed(base_pitch[:, :, None] / 128)
             else:
                 pitch_cond += self.base_pitch_embed(base_pitch[:, :, None])
-        if hparams['use_spk_id'] and spk_embed is not None:
+        if hparams["use_spk_id"] and spk_embed is not None:
             pitch_cond += spk_embed
         return pitch_cond, base_pitch
 
-    def forward_pitch_reflow(
-            self, pitch_cond, steps: int = 10
-    ):
+    def forward_pitch_reflow(self, pitch_cond, steps: int = 10):
         x_pred = self.pitch_predictor(pitch_cond, steps=steps)
         return x_pred
 
@@ -285,10 +331,26 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
         return pitch_pred
 
     def forward_variance_preprocess(
-            self, encoder_out, ph_dur, pitch,
-            variances: dict = None, retake=None, spk_embed=None
+        self,
+        encoder_out,
+        ph_dur,
+        pitch,
+        variances: dict = None,
+        retake=None,
+        spk_embed=None,
     ):
-        condition = self.forward_mel2x_gather(encoder_out, ph_dur, x_dim=self.hidden_size, check_stretch_embed=True)
+        condition = self.forward_mel2x_gather(
+            encoder_out, ph_dur, x_dim=self.hidden_size, check_stretch_embed=True
+        )
+        if self.use_key_shift_embed and hasattr(self, "frozen_key_shift"):
+            condition += self.key_shift_embed(
+                self.frozen_key_shift[:, None, None]
+                * self.variance_retake_scaling["key_shift"]
+            )
+        if self.use_speed_embed and hasattr(self, "frozen_speed"):
+            condition += self.speed_embed(
+                self.frozen_speed[:, None, None] * self.variance_retake_scaling["speed"]
+            )
         if self.use_variance_scaling:
             variance_cond = condition + self.pitch_embed(pitch[:, :, None] / 12)
         else:
@@ -298,11 +360,14 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
             for v_retake in (~retake).split(1, dim=2)
         ]
         variance_embeds = [
-            self.variance_embeds[v_name](variances[v_name][:, :, None] * self.variance_retake_scaling[v_name]) * v_masks
+            self.variance_embeds[v_name](
+                variances[v_name][:, :, None] * self.variance_retake_scaling[v_name]
+            )
+            * v_masks
             for v_name, v_masks in zip(self.variance_prediction_list, non_retake_masks)
         ]
         variance_cond += torch.stack(variance_embeds, dim=-1).sum(-1)
-        if hparams['use_spk_id'] and spk_embed is not None:
+        if hparams["use_spk_id"] and spk_embed is not None:
             variance_cond += spk_embed
         return variance_cond
 

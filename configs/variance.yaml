@@ -18,6 +18,19 @@ binarization_args:
   shuffle: true
   num_workers: 0
   prefer_ds: false
+augmentation_args:
+  random_pitch_shifting:
+    enabled: false
+    range: [-5., 5.]
+    scale: 0.75
+  fixed_pitch_shifting:
+    enabled: false
+    targets: [-5., 5.]
+    scale: 0.5
+  random_time_stretching:
+    enabled: false
+    range: [0.5, 2.]
+    scale: 0.75
 
 binary_data_dir: 'data/opencpop_variance/binary'
 binarizer_cls: preprocessing.variance_binarizer.VarianceBinarizer
@@ -38,6 +51,8 @@ enc_ffn_kernel_size: 3
 use_rope: true
 rope_interleaved: false
 use_stretch_embed: false
+use_key_shift_embed: false
+use_speed_embed: false
 use_variance_scaling: true
 rel_pos: true
 hidden_size: 384

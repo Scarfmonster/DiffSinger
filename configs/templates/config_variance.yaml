@@ -63,10 +63,26 @@ voicing_db_max: -12.0
 tension_logit_min: -10.0
 tension_logit_max: 10.0
 
+augmentation_args:
+  random_pitch_shifting:
+    enabled: true
+    range: [-5., 5.]
+    scale: 0.75
+  fixed_pitch_shifting:
+    enabled: false
+    targets: [-5., 5.]
+    scale: 0.5
+  random_time_stretching:
+    enabled: true
+    range: [0.5, 2.]
+    scale: 0.75
+
 enc_ffn_kernel_size: 3
 use_rope: true
 rope_interleaved: false
-use_stretch_embed: false
+use_stretch_embed: true
+use_key_shift_embed: true
+use_speed_embed: true
 use_variance_scaling: true
 hidden_size: 384
 dur_prediction_args:
