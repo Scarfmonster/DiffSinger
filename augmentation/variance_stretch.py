@@ -133,8 +133,8 @@ class VarianceStretchAugmentation(BaseAugmentation):
 
             # base_pitch recomputation (conditional on predict_pitch)
             if "note_midi" in aug_item and "mel2note" in aug_item:
-                nm_t = torch.from_numpy(aug_item["note_midi"])
-                mn_t = torch.from_numpy(aug_item["mel2note"])
+                nm_t = torch.from_numpy(aug_item["note_midi"]).to(self.device)
+                mn_t = torch.from_numpy(aug_item["mel2note"]).to(self.device)
                 fmp = torch.gather(F.pad(nm_t, [1, 0], value=0.0), 0, mn_t)
                 aug_item["base_pitch"] = self.midi_smooth(fmp[None])[0].cpu().numpy()
 
@@ -166,7 +166,7 @@ class VarianceStretchAugmentation(BaseAugmentation):
                 pd_t = torch.from_numpy(aug_item["ph_dur"])
                 T_ph = len(aug_item["tokens"])
                 mel2dur = torch.gather(F.pad(pd_t, [1, 0], value=1), 0, m2ph)
-                pm = p_t.new_zeros(T_ph + 1).scatter_add(0, m2ph, p_t / mel2dur)
+                pm = p_t.new_zeros(T_ph + 1).scatter_add(0, m2ph, p_t / mel2dur)[1:]
                 aug_item["midi"] = pm.round().long().clamp(0, 127).cpu().numpy()
 
         return aug_item
