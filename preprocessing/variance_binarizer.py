@@ -52,6 +52,8 @@ VARIANCE_ITEM_ATTRIBUTES = [
     "breathiness",  # frame-level RMS of aperiodic parts (dB), float32[T_s,]
     "voicing",  # frame-level RMS of harmonic parts (dB), float32[T_s,]
     "tension",  # frame-level tension (logit), float32[T_s,]
+    "key_shift",  # key shift in semitones, float scalar
+    "speed",  # speed factor, float scalar
 ]
 WAV_CANDIDATE_EXTENSIONS = [".wav", ".flac"]
 DS_INDEX_SEP = "#"

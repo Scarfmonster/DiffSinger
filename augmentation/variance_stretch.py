@@ -1,8 +1,9 @@
+from copy import deepcopy
+
 import librosa
 import numpy as np
 import torch
 import torch.nn.functional as F
-from copy import deepcopy
 
 from basics.base_augmentation import BaseAugmentation, require_same_keys
 from basics.base_pe import BasePE
