@@ -102,6 +102,10 @@ class VarianceStretchAugmentation(BaseAugmentation):
                 ).long()
                 new_nd = torch.diff(nd_acc, dim=0, prepend=nd_acc.new_zeros(1))
                 new_nd = new_nd.clamp(min=1)
+                nd_total_target = total_rounded
+                nd_adjust = nd_total_target - int(new_nd.sum())
+                if nd_adjust != 0 and len(new_nd) > 0:
+                    new_nd[-1] = (new_nd[-1] + nd_adjust).clamp(min=1)
                 aug_item["note_dur"] = new_nd.cpu().numpy()
 
                 if "mel2note" in aug_item:
@@ -113,7 +117,15 @@ class VarianceStretchAugmentation(BaseAugmentation):
                         self.device,
                     )
                     if mel2note.shape[0] != new_length:
-                        mel2note = mel2note.clamp(0, len(new_nd))
+                        if mel2note.shape[0] < new_length:
+                            mel2note = torch.cat(
+                                [
+                                    mel2note,
+                                    mel2note[-1].repeat(new_length - mel2note.shape[0]),
+                                ]
+                            )
+                        else:
+                            mel2note = mel2note[:new_length]
                     aug_item["mel2note"] = mel2note.cpu().numpy()
 
             # pitch and uv re-extraction (conditional)
