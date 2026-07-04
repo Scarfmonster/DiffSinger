@@ -3,6 +3,7 @@ from copy import deepcopy
 import librosa
 import numpy as np
 import torch
+import warnings
 import torch.nn.functional as F
 
 from basics.base_augmentation import BaseAugmentation, require_same_keys
@@ -20,7 +21,7 @@ class VarianceStretchAugmentation(BaseAugmentation):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.lr = LengthRegulator().to(self.device)
         self.pe = pe
-        self.midi_smooth = (
+        self._midi_smooth = (
             SinusoidalSmoothingConv1d(
                 round(hparams["midi_smooth_width"] / self.timestep)
             )
@@ -36,11 +37,17 @@ class VarianceStretchAugmentation(BaseAugmentation):
 
         # Pitch shifting (no waveform required)
         if key_shift != 0.0:
+            assert -127 <= key_shift <= 127, \
+                f"key_shift {key_shift} out of range [-127, 127]"
             aug_item["pitch"] += key_shift
             if "note_midi" in aug_item:
                 aug_item["note_midi"] = (aug_item["note_midi"] + key_shift).clip(0, 127)
             if "base_pitch" in aug_item:
                 aug_item["base_pitch"] += key_shift
+            if "midi" in aug_item:
+                aug_item["midi"] = np.clip(
+                    np.round(aug_item["midi"] + key_shift), 0, 127
+                ).astype(aug_item["midi"].dtype)
 
             if replace_spk_id is not None:
                 aug_item["spk_id"] = replace_spk_id
@@ -48,11 +55,14 @@ class VarianceStretchAugmentation(BaseAugmentation):
                 aug_item["key_shift"] = key_shift
 
         # Time stretching (requires waveform)
-        has_wav = (
-            aug_item.get("wav_fn") is not None and aug_item.get("wav_fn") != "None"
-        )
+        has_wav = aug_item.get("wav_fn") is not None
 
-        if has_wav and speed != 1.0:
+        if has_wav and (speed != 1.0 or hparams.get("use_speed_embed", False)):
+            assert speed > 0, f"speed must be positive, got {speed}"
+
+            if len(aug_item["ph_dur"]) == 0:
+                return aug_item
+
             timestep = self.timestep
             hop_size = hparams["hop_size"]
             sample_rate = hparams["audio_sample_rate"]
@@ -73,6 +83,11 @@ class VarianceStretchAugmentation(BaseAugmentation):
             total_rounded = int(round(float(ph_dur_sec.sum()) / timestep))
             adjust = total_rounded - int(new_ph_dur.sum())
             if adjust != 0 and len(new_ph_dur) > 0:
+                if abs(adjust) > 0.1 * total_rounded:
+                    warnings.warn(
+                        f"Large ph_dur adjustment: {adjust} frames "
+                        f"(total_rounded={total_rounded})"
+                    )
                 new_ph_dur[-1] = (new_ph_dur[-1] + adjust).clamp(min=1)
             aug_item["ph_dur"] = new_ph_dur.cpu().numpy()
 
@@ -84,9 +99,10 @@ class VarianceStretchAugmentation(BaseAugmentation):
                 aug_item["mel2ph"] = mel2ph.cpu().numpy()
             else:
                 new_length = max(1, int(round(aug_item["ph_dur"].sum())))
+                aug_item["length"] = new_length
 
-            # seconds derived from actual feature length
-            aug_item["seconds"] = (new_length * hop_size) / sample_rate
+            # wall-time at the new audio speed (matches spec_stretch.py)
+            aug_item["seconds"] = aug_item["seconds"] / quantized_speed
 
             # waveform
             waveform, _ = librosa.load(aug_item["wav_fn"], sr=sample_rate, mono=True)
@@ -105,6 +121,11 @@ class VarianceStretchAugmentation(BaseAugmentation):
                 nd_total_target = total_rounded
                 nd_adjust = nd_total_target - int(new_nd.sum())
                 if nd_adjust != 0 and len(new_nd) > 0:
+                    if abs(nd_adjust) > 0.1 * total_rounded:
+                        warnings.warn(
+                            f"Large note_dur adjustment: {nd_adjust} frames "
+                            f"(total_rounded={total_rounded})"
+                        )
                     new_nd[-1] = (new_nd[-1] + nd_adjust).clamp(min=1)
                 aug_item["note_dur"] = new_nd.cpu().numpy()
 
@@ -141,11 +162,15 @@ class VarianceStretchAugmentation(BaseAugmentation):
                     interp_uv=True,
                 )
                 if "pitch" in aug_item:
-                    aug_item["pitch"] = librosa.hz_to_midi(f0_hz.astype(np.float32))
+                    f0_hz = np.nan_to_num(f0_hz)
+                    f0_hz = np.clip(f0_hz, hparams["f0_min"], hparams["f0_max"])
+                    f0_midi = librosa.hz_to_midi(f0_hz.astype(np.float32)) + key_shift
+                    aug_item["pitch"] = f0_midi
                 if "uv" in aug_item:
                     aug_item["uv"] = uv_mask
 
-            # variance curve resampling
+            # variance curve resampling: directly resample to new length without
+            # re-extraction (see spec_stretch.py:56-83 for design rationale)
             for v_name in VARIANCE_CHECKLIST:
                 if v_name in aug_item:
                     orig = aug_item[v_name]
@@ -160,10 +185,12 @@ class VarianceStretchAugmentation(BaseAugmentation):
             if "note_midi" in aug_item and "mel2note" in aug_item:
                 nm_t = torch.from_numpy(aug_item["note_midi"]).to(self.device)
                 mn_t = torch.from_numpy(aug_item["mel2note"]).to(self.device)
-                mn_t = mn_t.clamp(0, len(nm_t))
+                assert 1 <= mn_t.min() and mn_t.max() <= len(nm_t), \
+                    f"mel2note indices out of range [1, {len(nm_t)}]: " \
+                    f"min={mn_t.min().item()}, max={mn_t.max().item()}"
                 fmp = torch.gather(F.pad(nm_t, [1, 0], value=0.0), 0, mn_t)
                 aug_item["base_pitch"] = (
-                    self.midi_smooth(fmp[None])[0].detach().cpu().numpy()
+                    self._midi_smooth(fmp[None])[0].detach().cpu().numpy()
                 )
 
             # midi recomputation (conditional on predict_dur)
@@ -171,10 +198,13 @@ class VarianceStretchAugmentation(BaseAugmentation):
                 if "mel2ph" in aug_item:
                     m2ph = torch.from_numpy(aug_item["mel2ph"])
                 else:
-                    pd_local = aug_item["ph_dur"].astype(np.float32) * timestep
-                    m2ph = get_mel2ph_torch(
-                        self.lr, pd_local, new_length, timestep, self.device
+                    pd_seconds_at_original_speed = (
+                        aug_item["ph_dur"].astype(np.float32) * timestep
                     )
+                    m2ph = get_mel2ph_torch(
+                        self.lr, pd_seconds_at_original_speed, new_length, timestep, self.device
+                    )
+                    aug_item["mel2ph"] = m2ph.cpu().numpy()
 
                 if "pitch" in aug_item:
                     p_t = torch.from_numpy(aug_item["pitch"])
@@ -189,6 +219,8 @@ class VarianceStretchAugmentation(BaseAugmentation):
                         f0_max=hparams["f0_max"],
                         interp_uv=True,
                     )
+                    f0_m = np.nan_to_num(f0_m)
+                    f0_m = np.clip(f0_m, hparams["f0_min"], hparams["f0_max"])
                     p_t = torch.from_numpy(librosa.hz_to_midi(f0_m))
 
                 pd_t = torch.from_numpy(aug_item["ph_dur"])
